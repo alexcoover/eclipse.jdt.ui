@@ -2059,6 +2059,15 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 		return typeName + JavaModelUtil.DEFAULT_CU_SUFFIX;
 	}
 
+	protected IStatus parseMultipleTypes(String typeName) {
+		StatusInfo status= new StatusInfo();
+		String[] typesArray = typeName.split(","); //$NON-NLS-1$
+		for (String type : typesArray) {
+
+		}
+		return status;
+	}
+
 
 	/**
 	 * Hook method that gets called when the type name has changed. The method validates the
@@ -2080,80 +2089,93 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 			return status;
 		}
 
+		if (typeNameWithExtension.indexOf(',') != -1) {
+			status.setInfo(NewWizardMessages.NewTypeWizardPage_info_CreateMultipleTypes);
+		}
+
 		if (typeNameWithExtension.endsWith(JavaModelUtil.DEFAULT_CU_SUFFIX)) {
 			status.setInfo(NewWizardMessages.NewTypeWizardPage_info_FileExtensionNotRequired);
 		}
 
-		String typeNameWithParameters= getTypeName();
 
-		String typeName= getTypeNameWithoutParameters();
-		if (typeName.indexOf('.') != -1) {
-			status.setError(NewWizardMessages.NewTypeWizardPage_error_QualifiedName);
-			return status;
-		}
 
-		IJavaProject project= getJavaProject();
-		IStatus val= validateJavaTypeName(typeName, project);
-		if (val.getSeverity() == IStatus.ERROR) {
-			status.setError(Messages.format(NewWizardMessages.NewTypeWizardPage_error_InvalidTypeName, val.getMessage()));
-			return status;
-		} else if (val.getSeverity() == IStatus.WARNING) {
-			status.setWarning(Messages.format(NewWizardMessages.NewTypeWizardPage_warning_TypeNameDiscouraged, val.getMessage()));
-			// continue checking
-		}
+		String typeNameGroup= getTypeNameWithoutParameters();
 
-		// must not exist
-		if (!isEnclosingTypeSelected()) {
-			IPackageFragment pack= getPackageFragment();
-			if (pack != null) {
-				ICompilationUnit cu= pack.getCompilationUnit(getCompilationUnitName(typeName));
-				fCurrType= cu.getType(typeName);
-				IResource resource= cu.getResource();
+		String[] typesArray = typeNameGroup.split(","); //$NON-NLS-1$
+		for (String typeNameChild : typesArray) {
 
-				if (resource.exists()) {
-					status.setError(NewWizardMessages.NewTypeWizardPage_error_TypeNameExists);
-					return status;
-				}
-				if (!ResourcesPlugin.getWorkspace().validateFiltered(resource).isOK()) {
-					status.setError(NewWizardMessages.NewTypeWizardPage_error_TypeNameFiltered);
-					return status;
-				}
-				URI location= resource.getLocationURI();
-				if (location != null) {
-					try {
-						IFileStore store= EFS.getStore(location);
-						if (store.fetchInfo().exists()) {
-							status.setError(NewWizardMessages.NewTypeWizardPage_error_TypeNameExistsDifferentCase);
-							return status;
+			String typeName = typeNameChild.trim();
+
+			String typeNameWithParameters= typeName;
+
+			if (typeName.indexOf('.') != -1) {
+				status.setError(NewWizardMessages.NewTypeWizardPage_error_QualifiedName);
+				return status;
+			}
+
+			IJavaProject project= getJavaProject();
+			IStatus val= validateJavaTypeName(typeName, project);
+			if (val.getSeverity() == IStatus.ERROR) {
+				status.setError(Messages.format(NewWizardMessages.NewTypeWizardPage_error_InvalidTypeName, val.getMessage()));
+				return status;
+			} else if (val.getSeverity() == IStatus.WARNING) {
+				status.setWarning(Messages.format(NewWizardMessages.NewTypeWizardPage_warning_TypeNameDiscouraged, val.getMessage()));
+				// continue checking
+			}
+
+			// must not exist
+			if (!isEnclosingTypeSelected()) {
+				IPackageFragment pack= getPackageFragment();
+				if (pack != null) {
+					ICompilationUnit cu= pack.getCompilationUnit(getCompilationUnitName(typeName));
+					fCurrType= cu.getType(typeName);
+					IResource resource= cu.getResource();
+
+					if (resource.exists()) {
+						status.setError(NewWizardMessages.NewTypeWizardPage_error_TypeNameExists);
+						return status;
+					}
+					if (!ResourcesPlugin.getWorkspace().validateFiltered(resource).isOK()) {
+						status.setError(NewWizardMessages.NewTypeWizardPage_error_TypeNameFiltered);
+						return status;
+					}
+					URI location= resource.getLocationURI();
+					if (location != null) {
+						try {
+							IFileStore store= EFS.getStore(location);
+							if (store.fetchInfo().exists()) {
+								status.setError(NewWizardMessages.NewTypeWizardPage_error_TypeNameExistsDifferentCase);
+								return status;
+							}
+						} catch (CoreException e) {
+							status.setError(Messages.format(
+								NewWizardMessages.NewTypeWizardPage_error_uri_location_unkown,
+								BasicElementLabels.getURLPart(Resources.getLocationString(resource))));
 						}
-					} catch (CoreException e) {
-						status.setError(Messages.format(
-							NewWizardMessages.NewTypeWizardPage_error_uri_location_unkown,
-							BasicElementLabels.getURLPart(Resources.getLocationString(resource))));
+					}
+				}
+			} else {
+				IType type= getEnclosingType();
+				if (type != null) {
+					fCurrType= type.getType(typeName);
+					if (fCurrType.exists()) {
+						status.setError(NewWizardMessages.NewTypeWizardPage_error_TypeNameExists);
+						return status;
 					}
 				}
 			}
-		} else {
-			IType type= getEnclosingType();
-			if (type != null) {
-				fCurrType= type.getType(typeName);
-				if (fCurrType.exists()) {
-					status.setError(NewWizardMessages.NewTypeWizardPage_error_TypeNameExists);
+
+			if (!typeNameWithParameters.equals(typeName) && project != null) {
+				String typeDeclaration= "class " + typeNameWithParameters + " {}"; //$NON-NLS-1$//$NON-NLS-2$
+				ASTParser parser= ASTParser.newParser(IASTSharedValues.SHARED_AST_LEVEL);
+				parser.setSource(typeDeclaration.toCharArray());
+				parser.setProject(project);
+				CompilationUnit compilationUnit= (CompilationUnit) parser.createAST(null);
+				IProblem[] problems= compilationUnit.getProblems();
+				if (problems.length > 0) {
+					status.setError(Messages.format(NewWizardMessages.NewTypeWizardPage_error_InvalidTypeName, problems[0].getMessage()));
 					return status;
 				}
-			}
-		}
-
-		if (!typeNameWithParameters.equals(typeName) && project != null) {
-			String typeDeclaration= "class " + typeNameWithParameters + " {}"; //$NON-NLS-1$//$NON-NLS-2$
-			ASTParser parser= ASTParser.newParser(IASTSharedValues.SHARED_AST_LEVEL);
-			parser.setSource(typeDeclaration.toCharArray());
-			parser.setProject(project);
-			CompilationUnit compilationUnit= (CompilationUnit) parser.createAST(null);
-			IProblem[] problems= compilationUnit.getProblems();
-			if (problems.length > 0) {
-				status.setError(Messages.format(NewWizardMessages.NewTypeWizardPage_error_InvalidTypeName, problems[0].getMessage()));
-				return status;
 			}
 		}
 		return status;

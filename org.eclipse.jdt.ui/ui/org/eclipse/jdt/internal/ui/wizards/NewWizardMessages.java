@@ -965,6 +965,8 @@ public final class NewWizardMessages extends NLS {
 	public static String NewModuleInfoWizardPage_warning_DiscouragedModuleName;
 	public static String NewModuleInfoWizardPage_error_EnterName;
 
+	public static String NewTypeWizardPage_info_CreateMultipleTypes;
+
 	static {
 		NLS.initializeMessages(BUNDLE_NAME, NewWizardMessages.class);
 	}
