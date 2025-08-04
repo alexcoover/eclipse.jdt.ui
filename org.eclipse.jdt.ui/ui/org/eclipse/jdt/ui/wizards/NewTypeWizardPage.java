@@ -12,6 +12,7 @@
  *     IBM Corporation - initial API and implementation
  *     John Kaplan, johnkaplantech@gmail.com - 108071 [code templates] template for body of newly created class
  *     Microsoft Corporation - [templates][content assist] - Extract the UI related code - https://bugs.eclipse.org/549989
+ *     Alex Coover, alexcoover@live.com - [wizard] - Added support for multiple type creation - https://github.com/eclipse-jdt/eclipse.jdt.ui/issues/1251
  *******************************************************************************/
 package org.eclipse.jdt.ui.wizards;
 
