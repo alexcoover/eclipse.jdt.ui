@@ -860,7 +860,16 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 		if (project == null || !project.exists()) {
 			return JavaConventions.validateJavaTypeName(text, JavaCore.VERSION_1_8, JavaCore.VERSION_1_8, null);
 		}
-		return JavaConventionsUtil.validateJavaTypeName(text, project);
+
+		String[] typeNamesGroup = text.split(","); //$NON-NLS-1$
+
+		IStatus typeNamesStatus = JavaConventionsUtil.validateJavaTypeName(typeNamesGroup[0].trim(), project);
+
+		for (String typeName : typeNamesGroup) {
+			typeNamesStatus = JavaConventionsUtil.validateJavaTypeName(typeName.trim(), project);
+			if (!typeNamesStatus.isOK()) return typeNamesStatus;
+		}
+		return typeNamesStatus;
 	}
 
 	private static IStatus validatePackageName(String text, IJavaProject project) {
@@ -1518,6 +1527,11 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 		return getTypeNameWithoutExtension(typeNameWithExtension);
 	}
 
+	public String getTypeName(String typeName) {
+		String typeNameWithExtension= typeName;
+		return getTypeNameWithoutExtension(typeNameWithExtension);
+	}
+
 	private String getTypeNameWithoutExtension(String typeNameWithExtension) {
 		if (!typeNameWithExtension.endsWith(JavaModelUtil.DEFAULT_CU_SUFFIX)) {
 			return typeNameWithExtension;
@@ -1817,7 +1831,8 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 		}
 		IPackageFragment pack= getPackageFragment();
 		if (pack != null) {
-			String cuName= getCompilationUnitName(getTypeNameWithoutParameters());
+			String[] typeNames= getTypeNameWithoutParameters().split(","); //$NON-NLS-1$
+			String cuName= getCompilationUnitName(typeNames[0].trim());
 			return pack.getCompilationUnit(cuName).getResource();
 		}
 		return null;
@@ -2080,80 +2095,93 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 			return status;
 		}
 
+		if (typeNameWithExtension.indexOf(',') != -1) {
+			status.setInfo(NewWizardMessages.NewTypeWizardPage_info_CreateMultipleTypes);
+		}
+
 		if (typeNameWithExtension.endsWith(JavaModelUtil.DEFAULT_CU_SUFFIX)) {
 			status.setInfo(NewWizardMessages.NewTypeWizardPage_info_FileExtensionNotRequired);
 		}
 
-		String typeNameWithParameters= getTypeName();
 
-		String typeName= getTypeNameWithoutParameters();
-		if (typeName.indexOf('.') != -1) {
-			status.setError(NewWizardMessages.NewTypeWizardPage_error_QualifiedName);
-			return status;
-		}
 
-		IJavaProject project= getJavaProject();
-		IStatus val= validateJavaTypeName(typeName, project);
-		if (val.getSeverity() == IStatus.ERROR) {
-			status.setError(Messages.format(NewWizardMessages.NewTypeWizardPage_error_InvalidTypeName, val.getMessage()));
-			return status;
-		} else if (val.getSeverity() == IStatus.WARNING) {
-			status.setWarning(Messages.format(NewWizardMessages.NewTypeWizardPage_warning_TypeNameDiscouraged, val.getMessage()));
-			// continue checking
-		}
+		String typeNameGroup= getTypeNameWithoutParameters();
 
-		// must not exist
-		if (!isEnclosingTypeSelected()) {
-			IPackageFragment pack= getPackageFragment();
-			if (pack != null) {
-				ICompilationUnit cu= pack.getCompilationUnit(getCompilationUnitName(typeName));
-				fCurrType= cu.getType(typeName);
-				IResource resource= cu.getResource();
+		String[] typesArray = typeNameGroup.split(","); //$NON-NLS-1$
+		for (String typeNameChild : typesArray) {
 
-				if (resource.exists()) {
-					status.setError(NewWizardMessages.NewTypeWizardPage_error_TypeNameExists);
-					return status;
-				}
-				if (!ResourcesPlugin.getWorkspace().validateFiltered(resource).isOK()) {
-					status.setError(NewWizardMessages.NewTypeWizardPage_error_TypeNameFiltered);
-					return status;
-				}
-				URI location= resource.getLocationURI();
-				if (location != null) {
-					try {
-						IFileStore store= EFS.getStore(location);
-						if (store.fetchInfo().exists()) {
-							status.setError(NewWizardMessages.NewTypeWizardPage_error_TypeNameExistsDifferentCase);
-							return status;
+			String typeName = typeNameChild.trim();
+
+			String typeNameWithParameters= typeName;
+
+			if (typeName.indexOf('.') != -1) {
+				status.setError(NewWizardMessages.NewTypeWizardPage_error_QualifiedName);
+				return status;
+			}
+
+			IJavaProject project= getJavaProject();
+			IStatus val= validateJavaTypeName(typeName, project);
+			if (val.getSeverity() == IStatus.ERROR) {
+				status.setError(Messages.format(NewWizardMessages.NewTypeWizardPage_error_InvalidTypeName, val.getMessage()));
+				return status;
+			} else if (val.getSeverity() == IStatus.WARNING) {
+				status.setWarning(Messages.format(NewWizardMessages.NewTypeWizardPage_warning_TypeNameDiscouraged, val.getMessage()));
+				// continue checking
+			}
+
+			// must not exist
+			if (!isEnclosingTypeSelected()) {
+				IPackageFragment pack= getPackageFragment();
+				if (pack != null) {
+					ICompilationUnit cu= pack.getCompilationUnit(getCompilationUnitName(typeName));
+					fCurrType= cu.getType(typeName);
+					IResource resource= cu.getResource();
+
+					if (resource.exists()) {
+						status.setError(NewWizardMessages.NewTypeWizardPage_error_TypeNameExists);
+						return status;
+					}
+					if (!ResourcesPlugin.getWorkspace().validateFiltered(resource).isOK()) {
+						status.setError(NewWizardMessages.NewTypeWizardPage_error_TypeNameFiltered);
+						return status;
+					}
+					URI location= resource.getLocationURI();
+					if (location != null) {
+						try {
+							IFileStore store= EFS.getStore(location);
+							if (store.fetchInfo().exists()) {
+								status.setError(NewWizardMessages.NewTypeWizardPage_error_TypeNameExistsDifferentCase);
+								return status;
+							}
+						} catch (CoreException e) {
+							status.setError(Messages.format(
+								NewWizardMessages.NewTypeWizardPage_error_uri_location_unkown,
+								BasicElementLabels.getURLPart(Resources.getLocationString(resource))));
 						}
-					} catch (CoreException e) {
-						status.setError(Messages.format(
-							NewWizardMessages.NewTypeWizardPage_error_uri_location_unkown,
-							BasicElementLabels.getURLPart(Resources.getLocationString(resource))));
+					}
+				}
+			} else {
+				IType type= getEnclosingType();
+				if (type != null) {
+					fCurrType= type.getType(typeName);
+					if (fCurrType.exists()) {
+						status.setError(NewWizardMessages.NewTypeWizardPage_error_TypeNameExists);
+						return status;
 					}
 				}
 			}
-		} else {
-			IType type= getEnclosingType();
-			if (type != null) {
-				fCurrType= type.getType(typeName);
-				if (fCurrType.exists()) {
-					status.setError(NewWizardMessages.NewTypeWizardPage_error_TypeNameExists);
+
+			if (!typeNameWithParameters.equals(typeName) && project != null) {
+				String typeDeclaration= "class " + typeNameWithParameters + " {}"; //$NON-NLS-1$//$NON-NLS-2$
+				ASTParser parser= ASTParser.newParser(IASTSharedValues.SHARED_AST_LEVEL);
+				parser.setSource(typeDeclaration.toCharArray());
+				parser.setProject(project);
+				CompilationUnit compilationUnit= (CompilationUnit) parser.createAST(null);
+				IProblem[] problems= compilationUnit.getProblems();
+				if (problems.length > 0) {
+					status.setError(Messages.format(NewWizardMessages.NewTypeWizardPage_error_InvalidTypeName, problems[0].getMessage()));
 					return status;
 				}
-			}
-		}
-
-		if (!typeNameWithParameters.equals(typeName) && project != null) {
-			String typeDeclaration= "class " + typeNameWithParameters + " {}"; //$NON-NLS-1$//$NON-NLS-2$
-			ASTParser parser= ASTParser.newParser(IASTSharedValues.SHARED_AST_LEVEL);
-			parser.setSource(typeDeclaration.toCharArray());
-			parser.setProject(project);
-			CompilationUnit compilationUnit= (CompilationUnit) parser.createAST(null);
-			IProblem[] problems= compilationUnit.getProblems();
-			if (problems.length > 0) {
-				status.setError(Messages.format(NewWizardMessages.NewTypeWizardPage_error_InvalidTypeName, problems[0].getMessage()));
-				return status;
 			}
 		}
 		return status;
@@ -2699,14 +2727,35 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 
 	// ---- creation ----------------
 
+
 	/**
-	 * Creates the new type using the entered field values.
+	 * Handles multiple types using the entered field values.
 	 *
 	 * @param monitor a progress monitor to report progress.
 	 * @throws CoreException Thrown when the creation failed.
 	 * @throws InterruptedException Thrown when the operation was canceled.
 	 */
-	public void createType(IProgressMonitor monitor) throws CoreException, InterruptedException {
+	public void createTypes(IProgressMonitor monitor) throws CoreException, InterruptedException {
+		String[] names = getTypeNameWithoutParameters().split(","); //$NON-NLS-1$
+		SubMonitor subMonitor = SubMonitor.convert(monitor, names.length);
+
+		for (String name : names) {
+			String typeName = name.trim();
+
+			if (typeName.isEmpty()) continue;
+			createType(subMonitor.split(1), typeName);
+		}
+	}
+
+	/**
+	 * Creates the new type using the passed type name.
+	 *
+	 * @param monitor a progress monitor to report progress.
+	 * @param name the type name.
+	 * @throws CoreException Thrown when the creation failed.
+	 * @throws InterruptedException Thrown when the operation was canceled.
+	 */
+	public void createType(IProgressMonitor monitor, String name) throws CoreException, InterruptedException {
 		if (monitor == null) {
 			monitor= new NullProgressMonitor();
 		}
@@ -2729,9 +2778,9 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 		boolean needsSave;
 		ICompilationUnit connectedCU= null;
 
-		try {
-			String typeName= getTypeNameWithoutParameters();
 
+		String typeName = name;
+		try {
 			boolean isInnerClass= isEnclosingTypeSelected();
 
 			IType createdType;
@@ -2754,7 +2803,7 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 
 				IBuffer buffer= parentCU.getBuffer();
 
-				String simpleTypeStub= constructSimpleTypeStub();
+				String simpleTypeStub= constructSimpleTypeStub(typeName);
 				String cuContent= constructCUContent(parentCU, simpleTypeStub, lineDelimiter);
 				buffer.setContents(cuContent);
 
@@ -2765,7 +2814,7 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 				// add an import that will be removed again. Having this import solves 14661
 				imports.addImport(JavaModelUtil.concatenateName(pack.getElementName(), typeName));
 
-				String typeContent= constructTypeStub(parentCU, imports, lineDelimiter);
+				String typeContent= constructTypeStub(parentCU, imports, lineDelimiter, typeName);
 
 				int index= cuContent.lastIndexOf(simpleTypeStub);
 				if (index == -1) {
@@ -2806,7 +2855,7 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 					content.append(lineDelimiter);
 				}
 
-				content.append(constructTypeStub(parentCU, imports, lineDelimiter));
+				content.append(constructTypeStub(parentCU, imports, lineDelimiter, typeName));
 				IJavaElement sibling= null;
 				if (enclosingType.isEnum()) {
 					IField[] fields = enclosingType.getFields();
@@ -3053,9 +3102,9 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 	}
 
 
-	private String constructSimpleTypeStub() {
+	private String constructSimpleTypeStub(String typeName) {
 		StringBuilder buf= new StringBuilder("public class "); //$NON-NLS-1$
-		buf.append(getTypeName());
+		buf.append(typeName);
 		buf.append("{ }"); //$NON-NLS-1$
 		return buf.toString();
 	}
@@ -3063,7 +3112,7 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 	/*
 	 * Called from createType to construct the source for this type
 	 */
-	private String constructTypeStub(ICompilationUnit parentCU, ImportsManager imports, String lineDelimiter) throws CoreException {
+	private String constructTypeStub(ICompilationUnit parentCU, ImportsManager imports, String lineDelimiter, String typeName) throws CoreException {
 		StringBuffer buf= new StringBuffer();
 
 		int modifiers= getModifiers();
@@ -3096,7 +3145,7 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 				break;
 		}
 		buf.append(type);
-		buf.append(getTypeName());
+		buf.append(typeName);
 		if (fTypeKind == RECORD_TYPE) {
 			buf.append("()"); //$NON-NLS-1$
 		}
@@ -3483,7 +3532,7 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 				if (monitor == null) {
 					monitor= new NullProgressMonitor();
 				}
-				createType(monitor);
+				createTypes(monitor);
 			} catch (CoreException e) {
 				throw new InvocationTargetException(e);
 			}
