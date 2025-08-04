@@ -186,7 +186,8 @@ public final class NewWizardMessages extends NLS {
 	public static String NewTypeWizardPage_error_SealedFinalNonSealedClass_extend_superclass_notSelected_message;
 	public static String NewTypeWizardPage_error_SealedFinalNonSealedClass_implement_superinterface_notSelected_message;
 	public static String NewTypeWizardPage_error_SealedFinalNonSealedInterface_extend_superinterface_notSelected_message;
-
+	public static String NewTypeWizardPage_info_CreateMultipleTypes;
+  
 	public static String OutputLocation_DotAsLocation;
 	public static String OutputLocation_SettingsAsLocation;
 	public static String OutputLocationDialog_removeProjectFromBP;
@@ -965,7 +966,11 @@ public final class NewWizardMessages extends NLS {
 	public static String NewModuleInfoWizardPage_warning_DiscouragedModuleName;
 	public static String NewModuleInfoWizardPage_error_EnterName;
 
-	public static String NewTypeWizardPage_info_CreateMultipleTypes;
+	public static String ReleaseAttributeConfiguration_defaultReleaseName;
+	public static String ReleaseAttributeConfiguration_dialogTitle;
+	public static String ReleaseAttributeConfiguration_nameLabel;
+	public static String ReleaseAttributeConfiguration_path;
+	public static String ReleaseAttributeConfiguration_warning;
 
 	static {
 		NLS.initializeMessages(BUNDLE_NAME, NewWizardMessages.class);

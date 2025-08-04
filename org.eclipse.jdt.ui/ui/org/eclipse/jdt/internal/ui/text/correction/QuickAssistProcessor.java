@@ -29,6 +29,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Hashtable;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -139,9 +140,9 @@ import org.eclipse.jdt.core.dom.rewrite.ListRewrite;
 
 import org.eclipse.jdt.internal.core.manipulation.StubUtility;
 import org.eclipse.jdt.internal.core.manipulation.dom.ASTResolving;
-import org.eclipse.jdt.internal.core.manipulation.util.BasicElementLabels;
 import org.eclipse.jdt.internal.core.manipulation.util.Strings;
 import org.eclipse.jdt.internal.corext.codemanipulation.ContextSensitiveImportRewriteContext;
+import org.eclipse.jdt.internal.corext.codemanipulation.StubUtility2Core;
 import org.eclipse.jdt.internal.corext.dom.ASTNodeFactory;
 import org.eclipse.jdt.internal.corext.dom.ASTNodes;
 import org.eclipse.jdt.internal.corext.dom.AbortSearchException;
@@ -229,6 +230,7 @@ import org.eclipse.jdt.internal.ui.text.correction.proposals.GenerateForLoopAssi
 import org.eclipse.jdt.internal.ui.text.correction.proposals.LinkedCorrectionProposal;
 import org.eclipse.jdt.internal.ui.text.correction.proposals.LinkedNamesAssistProposal;
 import org.eclipse.jdt.internal.ui.text.correction.proposals.NewDefiningMethodProposal;
+import org.eclipse.jdt.internal.ui.text.correction.proposals.NewDefiningMethodProposalCore;
 import org.eclipse.jdt.internal.ui.text.correction.proposals.NewInterfaceImplementationProposal;
 import org.eclipse.jdt.internal.ui.text.correction.proposals.RefactoringCorrectionProposal;
 import org.eclipse.jdt.internal.ui.text.correction.proposals.RefactoringCorrectionProposalCore;
@@ -2617,12 +2619,7 @@ public class QuickAssistProcessor implements IQuickAssistProcessor {
 		return true;
 	}
 
-
 	public static boolean getCreateInSuperClassProposals(IInvocationContext context, ASTNode node, Collection<ICommandAccess> resultingCollections) throws CoreException {
-		return getCreateInSuperClassProposals(context, node, resultingCollections, true);
-	}
-
-	public static boolean getCreateInSuperClassProposals(IInvocationContext context, ASTNode node, Collection<ICommandAccess> resultingCollections, boolean addOverride) throws CoreException {
 		if (!(node instanceof SimpleName) || !(node.getParent() instanceof MethodDeclaration)) {
 			return false;
 		}
@@ -2630,44 +2627,23 @@ public class QuickAssistProcessor implements IQuickAssistProcessor {
 		if (decl.getName() != node || decl.resolveBinding() == null || Modifier.isPrivate(decl.getModifiers())) {
 			return false;
 		}
+		boolean addOverride = StubUtility2Core.findAnnotation("java.lang.Override", decl.modifiers()) == null; //$NON-NLS-1$
+		return getCreateInSuperClassProposals(context, node, resultingCollections, addOverride);
+	}
 
-		ICompilationUnit cu= context.getCompilationUnit();
-		CompilationUnit astRoot= context.getASTRoot();
-
-		IMethodBinding binding= decl.resolveBinding();
-		ITypeBinding[] paramTypes= binding.getParameterTypes();
-
-		ITypeBinding[] superTypes= Bindings.getAllSuperTypes(binding.getDeclaringClass());
-		if (resultingCollections == null) {
-			for (ITypeBinding curr : superTypes) {
-				if (curr.isFromSource() && Bindings.findOverriddenMethodInType(curr, binding) == null) {
-					return true;
-				}
-			}
-			return false;
-		}
-		List<SingleVariableDeclaration> params= decl.parameters();
-		String[] paramNames= new String[paramTypes.length];
-		for (int i= 0; i < params.size(); i++) {
-			SingleVariableDeclaration param= params.get(i);
-			paramNames[i]= param.getName().getIdentifier();
-		}
-
-		for (ITypeBinding curr : superTypes) {
-			if (curr.isFromSource()) {
-				IMethodBinding method= Bindings.findOverriddenMethodInType(curr, binding);
-				if (method == null) {
-					ITypeBinding typeDecl= curr.getTypeDeclaration();
-					ICompilationUnit targetCU= ASTResolving.findCompilationUnitForBinding(cu, astRoot, typeDecl);
-					if (targetCU != null) {
-						String label= Messages.format(CorrectionMessages.QuickAssistProcessor_createmethodinsuper_description,
-								new String[] { BasicElementLabels.getJavaElementName(curr.getName()), BasicElementLabels.getJavaElementName(binding.getName()) });
-						resultingCollections.add(new NewDefiningMethodProposal(label, targetCU, astRoot, typeDecl, binding, paramNames, addOverride, IProposalRelevance.CREATE_METHOD_IN_SUPER));
-					}
-				}
+	public static boolean getCreateInSuperClassProposals(IInvocationContext context, ASTNode node, Collection<ICommandAccess> resultingCollections, boolean addOverride) throws CoreException {
+		Collection<Object> newResults = new LinkedList<>();
+		boolean result = QuickAssistProcessorUtil.getCreateInSuperClassProposals(context, node, newResults);
+		for (Object res : newResults) {
+			if (res instanceof NewDefiningMethodProposalCore proposal) {
+				resultingCollections.add(new NewDefiningMethodProposal(
+						proposal.getName(), proposal.getCompilationUnit(),
+						proposal.getInvocationNode(), proposal.getSenderBinding(),
+						proposal.getMethodBinding(), proposal.getParameterNames(),
+						addOverride, proposal.getRelevance()));
 			}
 		}
-		return true;
+		return result;
 	}
 
 	private static boolean getConvertEnhancedForLoopProposal(IInvocationContext context, ASTNode node, Collection<ICommandAccess> resultingCollections) {
