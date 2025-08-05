@@ -1528,11 +1528,6 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 		return getTypeNameWithoutExtension(typeNameWithExtension);
 	}
 
-	public String getTypeName(String typeName) {
-		String typeNameWithExtension= typeName;
-		return getTypeNameWithoutExtension(typeNameWithExtension);
-	}
-
 	private String getTypeNameWithoutExtension(String typeNameWithExtension) {
 		if (!typeNameWithExtension.endsWith(JavaModelUtil.DEFAULT_CU_SUFFIX)) {
 			return typeNameWithExtension;
@@ -2732,6 +2727,7 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 	/**
 	 * Handles multiple types using the entered field values.
 	 *
+	 * @since 3.36
 	 * @param monitor a progress monitor to report progress.
 	 * @throws CoreException Thrown when the creation failed.
 	 * @throws InterruptedException Thrown when the operation was canceled.
@@ -2751,6 +2747,7 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 	/**
 	 * Creates the new type using the passed type name.
 	 *
+	 * @since 3.36
 	 * @param monitor a progress monitor to report progress.
 	 * @param name the type name.
 	 * @throws CoreException Thrown when the creation failed.
