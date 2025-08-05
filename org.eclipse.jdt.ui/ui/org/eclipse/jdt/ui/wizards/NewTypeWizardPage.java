@@ -3287,7 +3287,20 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 		}
 	}
 
+	private String constructSimpleTypeStub() {
+		StringBuilder buf= new StringBuilder("public class "); //$NON-NLS-1$
+		buf.append(getTypeName());
+		buf.append("{ }"); //$NON-NLS-1$
+		return buf.toString();
+	}
 
+	/**
+	 * Constructs the type stub using the provided type name.
+	 *
+	 * @param typeName the name of the type to use in the stub
+	 * @return the generated type stub as a string
+	 * @since 3.36.0
+	 */
 	private String constructSimpleTypeStub(String typeName) {
 		StringBuilder buf= new StringBuilder("public class "); //$NON-NLS-1$
 		buf.append(typeName);
@@ -3295,8 +3308,16 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 		return buf.toString();
 	}
 
-	/*
-	 * Called from createType to construct the source for this type
+	/**
+	 * Constructs the type stub source for the given type name.
+	 *
+	 * @param parentCU the parent compilation unit
+	 * @param imports the imports manager to use
+	 * @param lineDelimiter the line delimiter to use
+	 * @param typeName the name of the type to generate
+	 * @return the generated source code for the type stub
+	 * @throws CoreException if an error occurs while generating the stub
+	 * @since 3.36.0
 	 */
 	private String constructTypeStub(ICompilationUnit parentCU, ImportsManager imports, String lineDelimiter, String typeName) throws CoreException {
 		StringBuffer buf= new StringBuffer();
@@ -3332,6 +3353,60 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 		}
 		buf.append(type);
 		buf.append(typeName);
+		if (fTypeKind == RECORD_TYPE) {
+			buf.append("()"); //$NON-NLS-1$
+		}
+		writeSuperClass(buf, imports);
+		writeSuperInterfaces(buf, imports);
+
+		buf.append(" {").append(lineDelimiter); //$NON-NLS-1$
+		String typeBody= CodeGeneration.getTypeBody(templateID, parentCU, getTypeName(), lineDelimiter);
+		if (typeBody != null) {
+			buf.append(typeBody);
+		} else {
+			buf.append(lineDelimiter);
+		}
+		buf.append('}').append(lineDelimiter);
+		return buf.toString();
+	}
+
+	/*
+	 * Called from createType to construct the source for this type
+	 */
+	private String constructTypeStub(ICompilationUnit parentCU, ImportsManager imports, String lineDelimiter) throws CoreException {
+		StringBuffer buf= new StringBuffer();
+
+		int modifiers= getModifiers();
+		buf.append(Flags.toString(modifiers));
+		if (modifiers != 0) {
+			buf.append(' ');
+		}
+		String type= ""; //$NON-NLS-1$
+		String templateID= ""; //$NON-NLS-1$
+		switch (fTypeKind) {
+			case CLASS_TYPE:
+				type= "class ";  //$NON-NLS-1$
+				templateID= CodeGeneration.CLASS_BODY_TEMPLATE_ID;
+				break;
+			case INTERFACE_TYPE:
+				type= "interface "; //$NON-NLS-1$
+				templateID= CodeGeneration.INTERFACE_BODY_TEMPLATE_ID;
+				break;
+			case ENUM_TYPE:
+				type= "enum "; //$NON-NLS-1$
+				templateID= CodeGeneration.ENUM_BODY_TEMPLATE_ID;
+				break;
+			case ANNOTATION_TYPE:
+				type= "@interface "; //$NON-NLS-1$
+				templateID= CodeGeneration.ANNOTATION_BODY_TEMPLATE_ID;
+				break;
+			case RECORD_TYPE:
+				type= "record "; //$NON-NLS-1$
+				templateID= CodeGeneration.RECORD_BODY_TEMPLATE_ID;
+				break;
+		}
+		buf.append(type);
+		buf.append(getTypeName());
 		if (fTypeKind == RECORD_TYPE) {
 			buf.append("()"); //$NON-NLS-1$
 		}
