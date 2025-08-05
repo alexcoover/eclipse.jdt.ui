@@ -2936,6 +2936,194 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 		}
 	}
 
+
+	/**
+	 * @deprecated Use {@link #createTypes(IProgressMonitor)} instead.
+	 */
+	@Deprecated
+	public void createType(IProgressMonitor monitor) throws CoreException, InterruptedException {
+		if (monitor == null) {
+			monitor= new NullProgressMonitor();
+		}
+
+		monitor.beginTask(NewWizardMessages.NewTypeWizardPage_operationdesc, 8);
+
+		IPackageFragmentRoot root= getPackageFragmentRoot();
+		IPackageFragment pack= getPackageFragment();
+		if (pack == null) {
+			pack= root.getPackageFragment(""); //$NON-NLS-1$
+		}
+
+		if (!pack.exists()) {
+			String packName= pack.getElementName();
+			pack= root.createPackageFragment(packName, true, Progress.subMonitor(monitor, 1));
+		} else {
+			monitor.worked(1);
+		}
+
+		boolean needsSave;
+		ICompilationUnit connectedCU= null;
+
+		try {
+			String typeName= getTypeNameWithoutParameters();
+
+			boolean isInnerClass= isEnclosingTypeSelected();
+
+			IType createdType;
+			ImportsManager imports;
+			int indent= 0;
+
+			Set<String> existingImports;
+
+			String lineDelimiter= null;
+			if (!isInnerClass) {
+				lineDelimiter= StubUtility.getLineDelimiterUsed(pack.getJavaProject());
+
+				String cuName= getCompilationUnitName(typeName);
+				ICompilationUnit parentCU= pack.createCompilationUnit(cuName, "", false, Progress.subMonitor(monitor, 2)); //$NON-NLS-1$
+				// create a working copy with a new owner
+
+				needsSave= true;
+				parentCU.becomeWorkingCopy(Progress.subMonitor(monitor, 1)); // cu is now a (primary) working copy
+				connectedCU= parentCU;
+
+				IBuffer buffer= parentCU.getBuffer();
+
+				String simpleTypeStub= constructSimpleTypeStub();
+				String cuContent= constructCUContent(parentCU, simpleTypeStub, lineDelimiter);
+				buffer.setContents(cuContent);
+
+				CompilationUnit astRoot= createASTForImports(parentCU);
+				existingImports= getExistingImports(astRoot);
+
+				imports= new ImportsManager(astRoot);
+				// add an import that will be removed again. Having this import solves 14661
+				imports.addImport(JavaModelUtil.concatenateName(pack.getElementName(), typeName));
+
+				String typeContent= constructTypeStub(parentCU, imports, lineDelimiter);
+
+				int index= cuContent.lastIndexOf(simpleTypeStub);
+				if (index == -1) {
+					AbstractTypeDeclaration typeNode= (AbstractTypeDeclaration) astRoot.types().get(0);
+					int start= ((ASTNode) typeNode.modifiers().get(0)).getStartPosition();
+					int end= typeNode.getStartPosition() + typeNode.getLength();
+					buffer.replace(start, end - start, typeContent);
+				} else {
+					buffer.replace(index, simpleTypeStub.length(), typeContent);
+				}
+
+				createdType= parentCU.getType(typeName);
+			} else {
+				IType enclosingType= getEnclosingType();
+
+				ICompilationUnit parentCU= enclosingType.getCompilationUnit();
+
+				needsSave= !parentCU.isWorkingCopy();
+				parentCU.becomeWorkingCopy(Progress.subMonitor(monitor, 1)); // cu is now for sure (primary) a working copy
+				connectedCU= parentCU;
+
+				CompilationUnit astRoot= createASTForImports(parentCU);
+				imports= new ImportsManager(astRoot);
+				existingImports= getExistingImports(astRoot);
+
+
+				// add imports that will be removed again. Having the imports solves 14661
+				for (IType topLevelType : parentCU.getTypes()) {
+					imports.addImport(topLevelType.getFullyQualifiedName('.'));
+				}
+
+				lineDelimiter= StubUtility.getLineDelimiterUsed(enclosingType);
+				StringBuilder content= new StringBuilder();
+
+				String comment= getTypeComment(parentCU, lineDelimiter);
+				if (comment != null) {
+					content.append(comment);
+					content.append(lineDelimiter);
+				}
+
+				content.append(constructTypeStub(parentCU, imports, lineDelimiter));
+				IJavaElement sibling= null;
+				if (enclosingType.isEnum()) {
+					IField[] fields = enclosingType.getFields();
+					if (fields.length > 0) {
+						for (IField field : fields) {
+							if (!field.isEnumConstant()) {
+								sibling = field;
+								break;
+							}
+						}
+					}
+				} else {
+					IJavaElement[] elems= enclosingType.getChildren();
+					sibling = elems.length > 0 ? elems[0] : null;
+				}
+
+				createdType= enclosingType.createType(content.toString(), sibling, false, Progress.subMonitor(monitor, 2));
+
+				indent= StubUtility.getIndentUsed(enclosingType) + 1;
+			}
+			if (monitor.isCanceled()) {
+				throw new InterruptedException();
+			}
+
+			// add imports for superclass/interfaces, so types can be resolved correctly
+
+			ICompilationUnit cu= createdType.getCompilationUnit();
+
+			imports.create(false, Progress.subMonitor(monitor, 1));
+
+			JavaModelUtil.reconcile(cu);
+
+			if (monitor.isCanceled()) {
+				throw new InterruptedException();
+			}
+
+			// set up again
+			CompilationUnit astRoot= createASTForImports(imports.getCompilationUnit());
+			imports= new ImportsManager(astRoot);
+
+			createTypeMembers(createdType, imports, Progress.subMonitor(monitor, 1));
+
+			// add imports
+			imports.create(false, Progress.subMonitor(monitor, 1));
+
+			removeUnusedImports(cu, existingImports, false);
+
+			JavaModelUtil.reconcile(cu);
+
+			ISourceRange range= createdType.getSourceRange();
+
+			IBuffer buf= cu.getBuffer();
+			String originalContent= buf.getText(range.getOffset(), range.getLength());
+
+			String formattedContent= CodeFormatterUtil.format(CodeFormatter.K_CLASS_BODY_DECLARATIONS, originalContent, indent, lineDelimiter,
+					FormatterProfileManager.getProjectSettings(pack.getJavaProject()));
+			formattedContent= Strings.trimLeadingTabsAndSpaces(formattedContent);
+			buf.replace(range.getOffset(), range.getLength(), formattedContent);
+			if (!isInnerClass) {
+				String fileComment= getFileComment(cu);
+				if (fileComment != null && fileComment.length() > 0) {
+					buf.replace(0, 0, fileComment + lineDelimiter);
+				}
+			}
+			fCreatedType= createdType;
+
+			if (needsSave) {
+				cu.commitWorkingCopy(true, Progress.subMonitor(monitor, 1));
+			} else {
+				monitor.worked(1);
+			}
+
+			updateSealedSuperTypes();
+
+		} finally {
+			if (connectedCU != null) {
+				connectedCU.discardWorkingCopy();
+			}
+			monitor.done();
+		}
+	}
+
 	private CompilationUnit createASTForImports(ICompilationUnit cu) {
 		ASTParser parser= ASTParser.newParser(IASTSharedValues.SHARED_AST_LEVEL);
 		parser.setSource(cu);
