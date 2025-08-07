@@ -862,7 +862,7 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 			return JavaConventions.validateJavaTypeName(text, JavaCore.VERSION_1_8, JavaCore.VERSION_1_8, null);
 		}
 
-		String[] typeNamesGroup = text.split(","); //$NON-NLS-1$
+		String[] typeNamesGroup = text.split(";"); //$NON-NLS-1$
 
 		IStatus typeNamesStatus = JavaConventionsUtil.validateJavaTypeName(typeNamesGroup[0].trim(), project);
 
@@ -1827,8 +1827,8 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 		}
 		IPackageFragment pack= getPackageFragment();
 		if (pack != null) {
-			String[] typeNames= getTypeNameWithoutParameters().split(","); //$NON-NLS-1$
-			String cuName= getCompilationUnitName(typeNames[0].trim());
+			String[] typeNames= getTypeNameWithoutParameters().split(";"); //$NON-NLS-1$
+			String cuName= getCompilationUnitName(typeNames[0]);
 			return pack.getCompilationUnit(cuName).getResource();
 		}
 		return null;
@@ -2091,7 +2091,7 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 			return status;
 		}
 
-		if (typeNameWithExtension.indexOf(',') != -1) {
+		if (typeNameWithExtension.indexOf(';') != -1) {
 			status.setInfo(NewWizardMessages.NewTypeWizardPage_info_CreateMultipleTypes);
 		}
 
@@ -2101,14 +2101,14 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 
 
 
-		String typeNameGroup= getTypeNameWithoutParameters();
+		String typeNameGroup= getTypeName();
 
-		String[] typesArray = typeNameGroup.split(","); //$NON-NLS-1$
+		String[] typesArray = typeNameGroup.split(";"); //$NON-NLS-1$
 		for (String typeNameChild : typesArray) {
 
-			String typeName = typeNameChild.trim();
+			String typeName = getTypeNameWithoutParameters(typeNameChild.trim());
 
-			String typeNameWithParameters= typeName;
+			String typeNameWithParameters= typeNameChild;
 
 			if (typeName.indexOf('.') != -1) {
 				status.setError(NewWizardMessages.NewTypeWizardPage_error_QualifiedName);
@@ -2733,11 +2733,11 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 	 * @throws InterruptedException Thrown when the operation was canceled.
 	 */
 	public void createTypes(IProgressMonitor monitor) throws CoreException, InterruptedException {
-		String[] names = getTypeNameWithoutParameters().split(","); //$NON-NLS-1$
+		String[] names = getTypeName().split(";"); //$NON-NLS-1$
 		SubMonitor subMonitor = SubMonitor.convert(monitor, names.length);
 
 		for (String name : names) {
-			String typeName = name.trim();
+			String typeName = name;
 
 			if (typeName.isEmpty()) continue;
 			createType(subMonitor.split(1), typeName);
@@ -2777,7 +2777,10 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 		ICompilationUnit connectedCU= null;
 
 
-		String typeName = name;
+		String typeName = getTypeNameWithoutParameters(name);
+
+		String typeNameWithParameters = name;
+
 		try {
 			boolean isInnerClass= isEnclosingTypeSelected();
 
@@ -2801,7 +2804,7 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 
 				IBuffer buffer= parentCU.getBuffer();
 
-				String simpleTypeStub= constructSimpleTypeStub(typeName);
+				String simpleTypeStub= constructSimpleTypeStub(typeNameWithParameters);
 				String cuContent= constructCUContent(parentCU, simpleTypeStub, lineDelimiter);
 				buffer.setContents(cuContent);
 
@@ -2812,7 +2815,7 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 				// add an import that will be removed again. Having this import solves 14661
 				imports.addImport(JavaModelUtil.concatenateName(pack.getElementName(), typeName));
 
-				String typeContent= constructTypeStub(parentCU, imports, lineDelimiter, typeName);
+				String typeContent= constructTypeStub(parentCU, imports, lineDelimiter, typeNameWithParameters);
 
 				int index= cuContent.lastIndexOf(simpleTypeStub);
 				if (index == -1) {
