@@ -2776,10 +2776,9 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 		boolean needsSave;
 		ICompilationUnit connectedCU= null;
 
+		String typeNameWithParameters = name.trim();
 
-		String typeName = getTypeNameWithoutParameters(name);
-
-		String typeNameWithParameters = name;
+		String typeName = getTypeNameWithoutParameters(typeNameWithParameters);
 
 		try {
 			boolean isInnerClass= isEnclosingTypeSelected();
