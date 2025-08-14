@@ -2855,7 +2855,7 @@ public abstract class NewTypeWizardPage extends NewContainerWizardPage {
 					content.append(lineDelimiter);
 				}
 
-				content.append(constructTypeStub(parentCU, imports, lineDelimiter, typeName));
+				content.append(constructTypeStub(parentCU, imports, lineDelimiter, typeNameWithParameters));
 				IJavaElement sibling= null;
 				if (enclosingType.isEnum()) {
 					IField[] fields = enclosingType.getFields();
